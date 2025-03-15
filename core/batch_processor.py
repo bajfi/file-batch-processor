@@ -62,7 +62,10 @@ class BatchProcessor:
             observer.on_complete()
 
     def process_files(
-        self, files: List[str], max_workers: Optional[int] = None
+        self,
+        files: List[str],
+        max_workers: Optional[int] = None,
+        save_format: str = "txt",
     ) -> None:
         """
         Process a list of files using the processor.
@@ -79,12 +82,17 @@ class BatchProcessor:
 
         # Create a thread to handle the processing
         thread = threading.Thread(
-            target=self._process_files_thread, args=(files, max_workers), daemon=True
+            target=self._process_files_thread,
+            args=(files, max_workers, save_format),
+            daemon=True,
         )
         thread.start()
 
     def _process_files_thread(
-        self, files: List[str], max_workers: Optional[int] = None
+        self,
+        files: List[str],
+        max_workers: Optional[int] = None,
+        save_format: str = "txt",
     ) -> None:
         """
         Process files in a separate thread.
@@ -97,7 +105,7 @@ class BatchProcessor:
             # Submit all tasks
             futures = []
             for file in files:
-                future = executor.submit(self._process_file, file)
+                future = executor.submit(self._process_file, file, save_format)
                 futures.append((future, file))
 
             # Process results as they complete
@@ -111,7 +119,7 @@ class BatchProcessor:
         # Notify that all processing is complete
         self._notify_complete()
 
-    def _process_file(self, file: str) -> str:
+    def _process_file(self, file: str, save_format: str) -> str:
         """
         Process a single file using the processor.
 
@@ -121,4 +129,4 @@ class BatchProcessor:
         Returns:
             Path to the result file
         """
-        return self.processor.process(file, str(self.output_dir))
+        return self.processor.process(file, str(self.output_dir), save_format)

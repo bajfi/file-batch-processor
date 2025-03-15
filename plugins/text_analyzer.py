@@ -45,7 +45,15 @@ class TextAnalyzer(Processor):
     def version(self) -> str:
         return "1.0.0"
 
-    def process(self, file: str, output_dir: str = "results") -> str:
+    @property
+    def save_format(self) -> list:
+        return [
+            ("Text", "txt"),
+        ]
+
+    def process(
+        self, file: str, output_dir: str = "results", save_format: str = "txt"
+    ) -> str:
         # Read the text file
         with open(file, "r", encoding="utf-8") as f:
             content = f.read()

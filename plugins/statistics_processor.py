@@ -45,7 +45,18 @@ class StatisticsProcessor(Processor):
     def metadata(self) -> dict:
         return {}
 
-    def process(self, file: str, output_dir: str = "results") -> str:
+    @property
+    def save_format(self) -> list:
+        return [
+            ("Text", "txt"),
+            ("CSV", "csv"),
+            ("Excel", "xlsx"),
+            ("Parquet", "parquet"),
+        ]
+
+    def process(
+        self, file: str, output_dir: str = "results", save_format: str = "csv"
+    ) -> str:
         # read file
         if file.endswith(".csv"):
             df = pd.read_csv(file)

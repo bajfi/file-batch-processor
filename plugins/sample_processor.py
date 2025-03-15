@@ -18,7 +18,15 @@ class SampleProcessor(Processor):
     def file_types(self) -> tuple:
         return (("All files", "*.*"),)
 
-    def process(self, file: str, output_dir: str = "results") -> str:
+    @property
+    def save_format(self) -> list:
+        return [
+            ("Text", "txt"),
+        ]
+
+    def process(
+        self, file: str, output_dir: str = "results", save_format: str = "txt"
+    ) -> str:
         # Create a simple output file
         output_file = os.path.join(output_dir, f"sample_{os.path.basename(file)}")
 

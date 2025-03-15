@@ -28,6 +28,7 @@ class MainWindow(tk.Tk, ProcessingObserver):
         self.plugin_manager = PluginManager()
         self.selected_processor: Optional[Processor] = None
         self.max_workers_var = tk.IntVar(value=os.cpu_count())
+        self.save_format_var = tk.StringVar()
         self.batch_size = 8  # Number of results to process at once
         self.result_queue = queue.Queue()
 
@@ -35,9 +36,24 @@ class MainWindow(tk.Tk, ProcessingObserver):
         self.processors = self.plugin_manager.get_processor_instances()
         if self.processors:
             self.selected_processor = self.processors[0]
+            # Initialize save format with the first processor's formats
+            save_formats = self.selected_processor.save_format
+            if save_formats:
+                self.save_format_var.set(
+                    f"{save_formats[0][0]} (*.{save_formats[0][1]})"
+                )
 
         # Create UI components
         self._create_ui()
+
+        # Initialize save format combobox with values from the selected processor
+        if self.processors and self.selected_processor:
+            save_formats = self.selected_processor.save_format
+            self.save_format_combo.config(
+                values=[f"{desc} (*.{ext})" for desc, ext in save_formats]
+            )
+            if save_formats:
+                self.save_format_combo.current(0)
 
         # Show warning if no processors found
         if not self.processors:
@@ -130,7 +146,7 @@ class MainWindow(tk.Tk, ProcessingObserver):
         ttk.Label(frame, text="Output Directory:").pack(side=tk.LEFT, padx=(10, 5))
         self.output_dir_var = tk.StringVar(value=self.output_dir)
         self.output_dir_entry = ttk.Entry(
-            frame, textvariable=self.output_dir_var, width=20
+            frame, textvariable=self.output_dir_var, width=30
         )
         self.output_dir_entry.pack(side=tk.LEFT, padx=(0, 5))
 
@@ -139,6 +155,13 @@ class MainWindow(tk.Tk, ProcessingObserver):
             frame, text="Browse...", command=self._browse_output_dir
         )
         self.browse_dir_btn.pack(side=tk.LEFT)
+
+        # Save format selector
+        ttk.Label(frame, text="Save Format:").pack(side=tk.LEFT, padx=(10, 5))
+        self.save_format_combo = ttk.Combobox(
+            frame, textvariable=self.save_format_var, state="readonly", width=10
+        )
+        self.save_format_combo.pack(side=tk.LEFT)
 
         # Workers control
         ttk.Label(frame, text="Parallel Cores:").pack(side=tk.LEFT, padx=(10, 5))
@@ -246,6 +269,17 @@ class MainWindow(tk.Tk, ProcessingObserver):
             self.selected_processor = self.processors[0]
             self.description_var.set(self.selected_processor.description)
             self.status_var.set(f"Selected tool: {self.selected_processor.name}")
+
+            # Update save format options
+            save_formats = self.selected_processor.save_format
+            self.save_format_combo.config(
+                values=[f"{desc} (*.{ext})" for desc, ext in save_formats]
+            )
+            if save_formats:
+                self.save_format_combo.current(0)
+                self.save_format_var.set(
+                    f"{save_formats[0][0]} (*.{save_formats[0][1]})"
+                )
         else:
             self.selected_processor = None
             self.description_var.set("")
@@ -254,6 +288,7 @@ class MainWindow(tk.Tk, ProcessingObserver):
                 "No Processors Found",
                 "No processing plugins were found. Please add plugins to the 'plugins' directory.",
             )
+            self.save_format_combo.config(values=[])
 
     def _on_processor_selected(self, event):
         """Handle processor selection change."""
@@ -263,6 +298,17 @@ class MainWindow(tk.Tk, ProcessingObserver):
                 self.selected_processor = processor
                 self.description_var.set(processor.description)
                 self.status_var.set(f"Selected tool: {processor.name}")
+
+                # Update save format options
+                save_formats = processor.save_format
+                self.save_format_combo.config(
+                    values=[f"{desc} (*.{ext})" for desc, ext in save_formats]
+                )
+                if save_formats:
+                    self.save_format_combo.current(0)
+                    self.save_format_var.set(
+                        f"{save_formats[0][0]} (*.{save_formats[0][1]})"
+                    )
                 break
 
     def _browse_output_dir(self):
@@ -317,6 +363,14 @@ class MainWindow(tk.Tk, ProcessingObserver):
         if not output_dir:
             output_dir = "results"
 
+        # Get selected save format
+        save_format = ""
+        if self.save_format_var.get():
+            # Extract extension from the format string like "Text (*.txt)"
+            format_str = self.save_format_var.get()
+            if "(*." in format_str:
+                save_format = format_str.split("*.")[-1].split(")")[0]
+
         # Get number of workers
         try:
             max_workers = self.max_workers_var.get()
@@ -343,7 +397,9 @@ class MainWindow(tk.Tk, ProcessingObserver):
         # Create batch processor and start processing
         self.batch_processor = BatchProcessor(self.selected_processor, output_dir)
         self.batch_processor.add_observer(self)
-        self.batch_processor.process_files(self.selected_files, max_workers)
+        self.batch_processor.process_files(
+            self.selected_files, max_workers, save_format
+        )
 
     def _set_controls_state(self, state):
         """Set the state of control buttons."""
@@ -353,6 +409,7 @@ class MainWindow(tk.Tk, ProcessingObserver):
         self.workers_spinbox.config(state=state)
         self.processor_combo.config(state="readonly" if state == tk.NORMAL else state)
         self.refresh_btn.config(state=state)
+        self.save_format_combo.config(state="readonly" if state == tk.NORMAL else state)
 
     # ProcessingObserver implementation
     def on_start(self, total_files):

@@ -28,7 +28,17 @@ class DateProcessor(Processor):
             ("All files", "*.*"),
         )
 
-    def process(self, file: str, output_dir: str = "results") -> str:
+    @property
+    def save_format(self) -> list:
+        return [
+            ("Text", "txt"),
+            ("CSV", "csv"),
+            ("Excel", "xlsx"),
+        ]
+
+    def process(
+        self, file: str, output_dir: str = "results", save_format: str = "csv"
+    ) -> str:
         # Check dependencies before processing
         deps_ok, missing = self.check_dependencies()
         if not deps_ok:

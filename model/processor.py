@@ -7,7 +7,7 @@ class Processor(ABC):
     """Base class for all file processors."""
 
     @abstractmethod
-    def process(self, file: str, output_dir: str) -> str:
+    def process(self, file: str, output_dir: str, save_format: str) -> str:
         """Process a file and return the path to the result file."""
         pass
 
@@ -26,6 +26,13 @@ class Processor(ABC):
     def file_types(self) -> Tuple[Tuple[str, str], ...]:
         """Return the supported file types."""
         return (("All files", "*.*"),)
+
+    @property
+    def save_format(self) -> List[Tuple[str, str]]:
+        """Return the supported save formats as a list of tuples (description, extension)."""
+        return [
+            ("Text", "txt"),
+        ]
 
     @property
     def config_options(self) -> Dict[str, Any]:
