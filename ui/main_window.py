@@ -67,24 +67,48 @@ class MainWindow(tk.Tk, ProcessingObserver):
 
     def _create_ui(self):
         """Create the user interface components."""
-        # Create main frame
+        # Create main frame with some padding for better spacing
         main_frame = ttk.Frame(self, padding="10")
         main_frame.pack(fill=tk.BOTH, expand=True)
 
-        # Create processor selection frame
-        self._create_processor_frame(main_frame)
+        # Create top, middle, and bottom sections
+        top_frame = ttk.Frame(main_frame)
+        top_frame.pack(fill=tk.X, pady=(0, 10))
 
-        # Create file operations frame
-        self._create_file_operations_frame(main_frame)
+        middle_frame = ttk.Frame(main_frame)
+        middle_frame.pack(fill=tk.BOTH, expand=True)
 
-        # Create files list frame
-        self._create_files_frame(main_frame)
+        # Create a PanedWindow for resizable split
+        self.paned_window = ttk.PanedWindow(middle_frame, orient=tk.HORIZONTAL)
+        self.paned_window.pack(fill=tk.BOTH, expand=True)
 
-        # Create progress frame
-        self._create_progress_frame(main_frame)
+        # Create left and right panes for the file list and results
+        left_pane = ttk.Frame(self.paned_window)
+        right_pane = ttk.Frame(self.paned_window)
 
-        # Create results frame
-        self._create_results_frame(main_frame)
+        # Add the panes to the PanedWindow with equal weights
+        self.paned_window.add(left_pane, weight=1)
+        self.paned_window.add(right_pane, weight=1)
+
+        # Top section components (processor selection and output settings)
+        top_left_frame = ttk.Frame(top_frame)
+        top_left_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 5))
+
+        top_right_frame = ttk.Frame(top_frame)
+        top_right_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=(5, 0))
+
+        self._create_processor_frame(top_left_frame)
+        self._create_file_operations_frame(top_right_frame)
+
+        # Middle section components
+        self._create_files_frame(left_pane)
+
+        # Right pane with progress and results
+        right_content_frame = ttk.Frame(right_pane)
+        right_content_frame.pack(fill=tk.BOTH, expand=True)
+
+        self._create_progress_frame(right_content_frame)
+        self._create_results_frame(right_content_frame)
 
         # Create status bar
         self._create_status_bar()
@@ -92,81 +116,98 @@ class MainWindow(tk.Tk, ProcessingObserver):
     def _create_processor_frame(self, parent):
         """Create the processor selection frame."""
         frame = ttk.LabelFrame(parent, text="Select Processing Tool")
-        frame.pack(fill=tk.X, pady=(0, 10))
+        frame.pack(fill=tk.BOTH, expand=True)
+
+        # Create a grid layout for better organization
+        frame.columnconfigure(1, weight=1)  # Make description column expandable
+
+        # Row 1: Processor selection and refresh button
+        ttk.Label(frame, text="Processor:").grid(
+            row=0, column=0, sticky=tk.W, padx=5, pady=5
+        )
+
+        processor_frame = ttk.Frame(frame)
+        processor_frame.grid(row=0, column=1, sticky=tk.EW, padx=5, pady=5)
 
         # Processor combobox
         self.processor_var = tk.StringVar()
         self.processor_combo = ttk.Combobox(
-            frame,
+            processor_frame,
             textvariable=self.processor_var,
             values=[p.name for p in self.processors],
             state="readonly" if self.processors else "disabled",
             width=30,
         )
-        self.processor_combo.pack(side=tk.LEFT, padx=10, pady=10)
+        self.processor_combo.pack(side=tk.LEFT, fill=tk.X, expand=True)
         if self.processors:
             self.processor_combo.current(0)
         self.processor_combo.bind("<<ComboboxSelected>>", self._on_processor_selected)
 
         # Refresh button
         self.refresh_btn = ttk.Button(
-            frame, text="Refresh Plugins", command=self._refresh_plugins
+            processor_frame, text="Refresh", command=self._refresh_plugins
         )
-        self.refresh_btn.pack(side=tk.LEFT, padx=5, pady=10)
+        self.refresh_btn.pack(side=tk.RIGHT, padx=(5, 0))
 
-        # Description
+        # Row 2: Description
+        ttk.Label(frame, text="Description:").grid(
+            row=1, column=0, sticky=tk.NW, padx=5, pady=5
+        )
+
         self.description_var = tk.StringVar()
         if self.selected_processor:
             self.description_var.set(self.selected_processor.description)
         self.description_label = ttk.Label(
-            frame, textvariable=self.description_var, wraplength=500
+            frame, textvariable=self.description_var, wraplength=400, justify=tk.LEFT
         )
-        self.description_label.pack(
-            side=tk.LEFT, padx=10, pady=10, fill=tk.X, expand=True
-        )
+        self.description_label.grid(row=1, column=1, sticky=tk.EW, padx=5, pady=5)
 
     def _create_file_operations_frame(self, parent):
         """Create the file operations frame."""
-        frame = ttk.Frame(parent)
-        frame.pack(fill=tk.X, pady=(0, 10))
+        frame = ttk.LabelFrame(parent, text="Output Settings")
+        frame.pack(fill=tk.BOTH, expand=True)
 
-        # Select files button
-        self.select_files_btn = ttk.Button(
-            frame, text="Select Files", command=self._select_files
+        # Use grid layout for better alignment
+        frame.columnconfigure(1, weight=1)
+
+        # Row 1: Output directory
+        ttk.Label(frame, text="Output Directory:").grid(
+            row=0, column=0, sticky=tk.W, padx=5, pady=5
         )
-        self.select_files_btn.pack(side=tk.LEFT, padx=(0, 5))
 
-        # Process button
-        self.process_btn = ttk.Button(
-            frame, text="Process Files", command=self._process_files, state=tk.DISABLED
-        )
-        self.process_btn.pack(side=tk.LEFT, padx=(0, 5))
+        output_dir_frame = ttk.Frame(frame)
+        output_dir_frame.grid(row=0, column=1, sticky=tk.EW, padx=5, pady=5)
 
-        # Output directory
-        ttk.Label(frame, text="Output Directory:").pack(side=tk.LEFT, padx=(10, 5))
         self.output_dir_var = tk.StringVar(value=self.output_dir)
         self.output_dir_entry = ttk.Entry(
-            frame, textvariable=self.output_dir_var, width=30
+            output_dir_frame, textvariable=self.output_dir_var
         )
-        self.output_dir_entry.pack(side=tk.LEFT, padx=(0, 5))
+        self.output_dir_entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
 
         # Browse button
         self.browse_dir_btn = ttk.Button(
-            frame, text="Browse...", command=self._browse_output_dir
+            output_dir_frame, text="Browse...", command=self._browse_output_dir
         )
-        self.browse_dir_btn.pack(side=tk.LEFT)
+        self.browse_dir_btn.pack(side=tk.RIGHT, padx=(5, 0))
 
-        # Save format selector
-        ttk.Label(frame, text="Save Format:").pack(side=tk.LEFT, padx=(10, 5))
+        # Row 2: Save format and workers
+        ttk.Label(frame, text="Save Format:").grid(
+            row=1, column=0, sticky=tk.W, padx=5, pady=5
+        )
+
+        options_frame = ttk.Frame(frame)
+        options_frame.grid(row=1, column=1, sticky=tk.EW, padx=5, pady=5)
+
         self.save_format_combo = ttk.Combobox(
-            frame, textvariable=self.save_format_var, state="readonly", width=10
+            options_frame, textvariable=self.save_format_var, state="readonly", width=20
         )
-        self.save_format_combo.pack(side=tk.LEFT)
+        self.save_format_combo.pack(side=tk.LEFT, fill=tk.X, expand=True)
 
-        # Workers control
-        ttk.Label(frame, text="Parallel Cores:").pack(side=tk.LEFT, padx=(10, 5))
+        ttk.Label(options_frame, text="Parallel Cores:").pack(
+            side=tk.LEFT, padx=(15, 5)
+        )
         self.workers_spinbox = ttk.Spinbox(
-            frame,
+            options_frame,
             from_=1,
             to=os.cpu_count() * 2,
             width=5,
@@ -177,13 +218,52 @@ class MainWindow(tk.Tk, ProcessingObserver):
     def _create_files_frame(self, parent):
         """Create the files list frame."""
         frame = ttk.LabelFrame(parent, text="Selected Files")
-        frame.pack(fill=tk.BOTH, expand=True, pady=(0, 10))
+        frame.pack(fill=tk.BOTH, expand=True)
 
-        # Files listbox
-        listbox_frame = ttk.Frame(frame)
-        listbox_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        # Top control buttons
+        control_frame = ttk.Frame(frame)
+        control_frame.pack(fill=tk.X, padx=10, pady=10)
 
-        self.files_listbox = tk.Listbox(listbox_frame)
+        self.select_files_btn = ttk.Button(
+            control_frame, text="Select Files", command=self._select_files, width=12
+        )
+        self.select_files_btn.pack(side=tk.LEFT)
+
+        self.delete_selected_btn = ttk.Button(
+            control_frame,
+            text="Delete Selected",
+            command=self._delete_selected_files,
+            width=14,
+        )
+        self.delete_selected_btn.pack(side=tk.LEFT, padx=5)
+
+        self.clear_all_btn = ttk.Button(
+            control_frame, text="Clear All", command=self._clear_all_files, width=10
+        )
+        self.clear_all_btn.pack(side=tk.LEFT)
+
+        # Process button aligned to the right
+        self.process_btn = ttk.Button(
+            control_frame,
+            text="Process Files",
+            command=self._process_files,
+            state=tk.DISABLED,
+            width=12,
+        )
+        self.process_btn.pack(side=tk.RIGHT)
+
+        # File count indicator
+        self.file_count_var = tk.StringVar(value="0 files selected")
+        self.file_count_label = ttk.Label(frame, textvariable=self.file_count_var)
+        self.file_count_label.pack(anchor=tk.W, padx=10, pady=(0, 5))
+
+        # Files listbox with border frame
+        listbox_frame = ttk.Frame(frame, relief=tk.SUNKEN, borderwidth=1)
+        listbox_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=(0, 10))
+
+        self.files_listbox = tk.Listbox(
+            listbox_frame, selectmode=tk.EXTENDED, borderwidth=0, highlightthickness=0
+        )
         self.files_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
         scrollbar = ttk.Scrollbar(
@@ -194,48 +274,71 @@ class MainWindow(tk.Tk, ProcessingObserver):
 
     def _create_progress_frame(self, parent):
         """Create the progress frame."""
-        frame = ttk.Frame(parent)
+        frame = ttk.LabelFrame(parent, text="Processing Progress")
         frame.pack(fill=tk.X, pady=(0, 10))
 
-        # Progress bar
-        ttk.Label(frame, text="Progress:").pack(side=tk.LEFT, padx=(0, 5))
+        # Use a container with padding
+        inner_frame = ttk.Frame(frame, padding=10)
+        inner_frame.pack(fill=tk.X)
+
+        # Progress bar and percentage in one row
+        progress_frame = ttk.Frame(inner_frame)
+        progress_frame.pack(fill=tk.X, pady=5)
+
         self.progress_var = tk.DoubleVar()
         self.progress_bar = ttk.Progressbar(
-            frame,
+            progress_frame,
             orient=tk.HORIZONTAL,
             length=100,
             mode="determinate",
             variable=self.progress_var,
         )
-        self.progress_bar.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        self.progress_bar.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 5))
 
         # Progress percentage
         self.progress_percent_var = tk.StringVar(value="0%")
         self.progress_percent_label = ttk.Label(
-            frame, textvariable=self.progress_percent_var, width=5
+            progress_frame, textvariable=self.progress_percent_var, width=5
         )
-        self.progress_percent_label.pack(side=tk.LEFT, padx=(5, 0))
+        self.progress_percent_label.pack(side=tk.RIGHT)
+
+        # Status message
+        self.process_status_var = tk.StringVar(value="Ready to process")
+        self.process_status_label = ttk.Label(
+            inner_frame, textvariable=self.process_status_var, foreground="blue"
+        )
+        self.process_status_label.pack(anchor=tk.W, pady=(5, 0))
 
     def _create_results_frame(self, parent):
         """Create the results frame."""
         frame = ttk.LabelFrame(parent, text="Processing Results")
         frame.pack(fill=tk.BOTH, expand=True)
 
-        # Results treeview
-        results_frame = ttk.Frame(frame)
-        results_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        # Results treeview with padding
+        results_frame = ttk.Frame(frame, padding=10)
+        results_frame.pack(fill=tk.BOTH, expand=True)
 
         columns = ("file", "result_file", "status")
         self.results_tree = ttk.Treeview(
-            results_frame, columns=columns, show="headings"
+            results_frame,
+            columns=columns,
+            show="headings",
+            selectmode="extended",
+            style="Results.Treeview",
         )
+
+        # Create a style
+        style = ttk.Style()
+        style.configure("Results.Treeview", rowheight=25)
+
         self.results_tree.heading("file", text="Input File")
         self.results_tree.heading("result_file", text="Output File")
         self.results_tree.heading("status", text="Status")
 
-        self.results_tree.column("file", width=250)
-        self.results_tree.column("result_file", width=250)
-        self.results_tree.column("status", width=200)
+        # Better proportions
+        self.results_tree.column("file", width=200, minwidth=150)
+        self.results_tree.column("result_file", width=200, minwidth=150)
+        self.results_tree.column("status", width=150, minwidth=100)
 
         self.results_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
@@ -250,7 +353,11 @@ class MainWindow(tk.Tk, ProcessingObserver):
         self.status_var = tk.StringVar()
         self.status_var.set("Ready")
         self.status_bar = ttk.Label(
-            self, textvariable=self.status_var, relief=tk.SUNKEN, anchor=tk.W
+            self,
+            textvariable=self.status_var,
+            relief=tk.SUNKEN,
+            anchor=tk.W,
+            padding=(5, 2),
         )
         self.status_bar.pack(side=tk.BOTTOM, fill=tk.X)
 
@@ -333,12 +440,55 @@ class MainWindow(tk.Tk, ProcessingObserver):
         files = filedialog.askopenfilenames(title="Select files", filetypes=filetypes)
 
         if files:
-            self.selected_files = list(files)
+            self.selected_files.extend(list(files))
             self._update_files_listbox()
-            self.process_btn.config(state=tk.NORMAL)
-            self.status_var.set(f"Selected {len(self.selected_files)} files")
+            self._update_process_button_state()
+            self.file_count_var.set(f"{len(self.selected_files)} files selected")
+            self.status_var.set(
+                f"Added {len(files)} files. Total: {len(self.selected_files)} files"
+            )
             self.progress_var.set(0)
             self.progress_percent_var.set("0%")
+            self.process_status_var.set("Ready to process")
+
+    def _delete_selected_files(self):
+        """Remove selected files from the list."""
+        selected_indices = self.files_listbox.curselection()
+        if not selected_indices:
+            return
+
+        # Convert to list and sort in reverse order to avoid index shifting
+        indices_to_remove = sorted(selected_indices, reverse=True)
+
+        # Remove the files from the list
+        for index in indices_to_remove:
+            del self.selected_files[index]
+
+        self._update_files_listbox()
+        self._update_process_button_state()
+        self.file_count_var.set(f"{len(self.selected_files)} files selected")
+        self.status_var.set(
+            f"Removed {len(selected_indices)} files. Remaining: {len(self.selected_files)} files"
+        )
+
+    def _clear_all_files(self):
+        """Clear all files from the list."""
+        if not self.selected_files:
+            return
+
+        file_count = len(self.selected_files)
+        self.selected_files.clear()
+        self._update_files_listbox()
+        self._update_process_button_state()
+        self.file_count_var.set("0 files selected")
+        self.status_var.set(f"Cleared {file_count} files from the list")
+
+    def _update_process_button_state(self):
+        """Update the state of the process button based on file selection."""
+        if self.selected_files:
+            self.process_btn.config(state=tk.NORMAL)
+        else:
+            self.process_btn.config(state=tk.DISABLED)
 
     def _update_files_listbox(self):
         """Update the files listbox with selected files."""
@@ -387,6 +537,9 @@ class MainWindow(tk.Tk, ProcessingObserver):
         # Reset progress bar
         self.progress_var.set(0)
         self.progress_percent_var.set("0%")
+        self.process_status_var.set(
+            f"Processing with {self.selected_processor.name}..."
+        )
 
         # Disable buttons during processing
         self._set_controls_state(tk.DISABLED)
@@ -410,6 +563,8 @@ class MainWindow(tk.Tk, ProcessingObserver):
         self.processor_combo.config(state="readonly" if state == tk.NORMAL else state)
         self.refresh_btn.config(state=state)
         self.save_format_combo.config(state="readonly" if state == tk.NORMAL else state)
+        self.delete_selected_btn.config(state=state)
+        self.clear_all_btn.config(state=state)
 
     # ProcessingObserver implementation
     def on_start(self, total_files):
@@ -429,17 +584,28 @@ class MainWindow(tk.Tk, ProcessingObserver):
                     os.path.basename(result) if result else "",
                     "Success",
                 ),
+                tags=("success",),
             )
         else:
             self.results_tree.insert(
-                "", tk.END, values=(os.path.basename(file), "", f"Error: {message}")
+                "",
+                tk.END,
+                values=(os.path.basename(file), "", f"Error: {message}"),
+                tags=("error",),
             )
+
+        # Configure tag colors
+        self.results_tree.tag_configure("success", foreground="green")
+        self.results_tree.tag_configure("error", foreground="red")
 
         # Update progress
         self.processed_files += 1
         progress_percent = (self.processed_files / self.total_files) * 100
         self.progress_var.set(progress_percent)
         self.progress_percent_var.set(f"{int(progress_percent)}%")
+        self.process_status_var.set(
+            f"Processed {self.processed_files} of {self.total_files} files"
+        )
         self.status_var.set(
             f"Processed {self.processed_files} of {self.total_files} files"
         )
@@ -449,6 +615,9 @@ class MainWindow(tk.Tk, ProcessingObserver):
         """Called when all processing is complete."""
         self.progress_var.set(100)
         self.progress_percent_var.set("100%")
+        self.process_status_var.set(
+            f"Processing complete: {self.total_files} files processed"
+        )
         self.status_var.set(f"Processed {self.total_files} files")
 
         # Re-enable buttons
