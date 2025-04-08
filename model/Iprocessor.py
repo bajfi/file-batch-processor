@@ -1,18 +1,19 @@
 import importlib
-from abc import ABC, abstractmethod
+from abc import ABC
+from enum import Enum, auto
 from typing import Any, Dict, List, Tuple
 
 
-class Processor(ABC):
-    """Base class for all file processors."""
+class ProcessorCategory(Enum):
+    INDIVIDUAL = auto()
+    ADJOINT = auto()
+    UNKNOWN = auto()
 
-    @abstractmethod
-    def process(self, file: str, output_dir: str, save_format: str) -> str:
-        """Process a file and return the path to the result file."""
-        pass
+
+class IProcessor(ABC):
+    """Interface for all file processors."""
 
     @property
-    @abstractmethod
     def name(self) -> str:
         """Return the name of the processor."""
         pass
@@ -28,21 +29,19 @@ class Processor(ABC):
         return (("All files", "*.*"),)
 
     @property
-    def save_format(self) -> List[Tuple[str, str]]:
-        """Return the supported save formats as a list of tuples (description, extension)."""
-        return [
-            ("Text", "txt"),
-        ]
-
-    @property
     def config_options(self) -> Dict[str, Any]:
         """Return configuration options for this processor."""
         return {}  # Default is no configuration options
 
     @property
-    def category(self) -> str:
+    def category(self) -> ProcessorCategory:
         """Return the category of this processor."""
-        return "General"  # Default category
+        return ProcessorCategory.UNKNOWN  # Default category
+
+    @property
+    def save_format(self) -> List[Tuple[str, str]]:
+        """Return the supported save formats."""
+        return [("All files", "*.*")]
 
     @property
     def documentation(self) -> str:

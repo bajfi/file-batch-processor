@@ -5,9 +5,10 @@ from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 from typing import List, Optional
 
-from core.batch_processor import BatchProcessor, ProcessingObserver
+from core.batchProcessor.Ibatch_processor import ProcessingObserver
+from core.batchProcessor.individual_batch_processor import IndividualBatchProcessor
 from core.plugin_manager import PluginManager
-from model.processor import Processor
+from model.Iprocessor import IProcessor
 
 
 class MainWindow(tk.Tk, ProcessingObserver):
@@ -26,7 +27,7 @@ class MainWindow(tk.Tk, ProcessingObserver):
         self.selected_files: List[str] = []
         self.output_dir = Path("results").resolve()
         self.plugin_manager = PluginManager()
-        self.selected_processor: Optional[Processor] = None
+        self.selected_processor: Optional[IProcessor] = None
         self.max_workers_var = tk.IntVar(value=os.cpu_count())
         self.save_format_var = tk.StringVar()
         self.batch_size = 8  # Number of results to process at once
@@ -222,7 +223,7 @@ class MainWindow(tk.Tk, ProcessingObserver):
 
         # Top control buttons
         control_frame = ttk.Frame(frame)
-        control_frame.pack(fill=tk.X, padx=10, pady=10)
+        control_frame.pack(fill=tk.X, padx=10, pady=(10, 5))
 
         self.select_files_btn = ttk.Button(
             control_frame, text="Select Files", command=self._select_files, width=12
@@ -242,15 +243,18 @@ class MainWindow(tk.Tk, ProcessingObserver):
         )
         self.clear_all_btn.pack(side=tk.LEFT)
 
-        # Process button aligned to the right
+        # Process button in a separate row
+        process_frame = ttk.Frame(frame)
+        process_frame.pack(fill=tk.X, padx=10, pady=(0, 15))
+
         self.process_btn = ttk.Button(
-            control_frame,
+            process_frame,
             text="Process Files",
             command=self._process_files,
             state=tk.DISABLED,
-            width=12,
+            padding=5,
         )
-        self.process_btn.pack(side=tk.RIGHT)
+        self.process_btn.pack(fill=tk.X, expand=True)
 
         # File count indicator
         self.file_count_var = tk.StringVar(value="0 files selected")
@@ -275,10 +279,10 @@ class MainWindow(tk.Tk, ProcessingObserver):
     def _create_progress_frame(self, parent):
         """Create the progress frame."""
         frame = ttk.LabelFrame(parent, text="Processing Progress")
-        frame.pack(fill=tk.X, pady=(0, 10))
+        frame.pack(fill=tk.X, pady=(0, 5))
 
         # Use a container with padding
-        inner_frame = ttk.Frame(frame, padding=10)
+        inner_frame = ttk.Frame(frame, padding=5)
         inner_frame.pack(fill=tk.X)
 
         # Progress bar and percentage in one row
@@ -548,7 +552,9 @@ class MainWindow(tk.Tk, ProcessingObserver):
         self.update()
 
         # Create batch processor and start processing
-        self.batch_processor = BatchProcessor(self.selected_processor, output_dir)
+        self.batch_processor = IndividualBatchProcessor(
+            self.selected_processor, output_dir
+        )
         self.batch_processor.add_observer(self)
         self.batch_processor.process_files(
             self.selected_files, max_workers, save_format

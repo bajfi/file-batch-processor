@@ -3,24 +3,28 @@ Date processor plugin for batch processing.
 """
 
 import os
+from typing import override
 
 import numpy as np
 import pandas as pd
-from model.processor import Processor
+from model.individual_processor import IndividualProcessor
 
 
-class DateProcessor(Processor):
+class DateProcessor(IndividualProcessor):
     """Processor for date-based data files."""
 
     @property
+    @override
     def name(self) -> str:
         return "Date Processor"
 
     @property
+    @override
     def description(self) -> str:
         return "Calculates MSE statistics for time series data."
 
     @property
+    @override
     def file_types(self) -> tuple:
         return (
             ("CSV files", "*.csv"),
@@ -29,6 +33,7 @@ class DateProcessor(Processor):
         )
 
     @property
+    @override
     def save_format(self) -> list:
         return [
             ("Text", "txt"),
@@ -36,6 +41,7 @@ class DateProcessor(Processor):
             ("Excel", "xlsx"),
         ]
 
+    @override
     def process(
         self, file: str, output_dir: str = "results", save_format: str = "csv"
     ) -> str:

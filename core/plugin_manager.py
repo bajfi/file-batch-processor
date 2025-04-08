@@ -4,7 +4,7 @@ import sys
 from pathlib import Path
 from typing import Dict, List, Type
 
-from model.processor import Processor
+from model.Iprocessor import IProcessor, ProcessorCategory
 
 
 class PluginManager:
@@ -13,10 +13,10 @@ class PluginManager:
     def __init__(self, plugin_dir: str = "plugins"):
         """Initialize with the plugin directory path."""
         self.plugin_dir = Path(plugin_dir).resolve()
-        self.processor_classes: Dict[str, Type[Processor]] = {}
-        self.processors: Dict[str, Processor] = {}
+        self.processor_classes: Dict[str, Type[IProcessor]] = {}
+        self.processors: Dict[str, IProcessor] = {}
 
-    def discover_plugins(self) -> List[Type[Processor]]:
+    def discover_plugins(self) -> List[Type[IProcessor]]:
         """
         Discover all available processor plugins.
         Returns a list of processor classes.
@@ -62,8 +62,8 @@ class PluginManager:
                 for name, obj in inspect.getmembers(module):
                     if (
                         inspect.isclass(obj)
-                        and issubclass(obj, Processor)
-                        and obj != Processor
+                        and issubclass(obj, IProcessor)
+                        and obj != IProcessor
                     ):
                         # print(f"Found processor class: {name}")
                         processors.append(obj)
@@ -78,8 +78,8 @@ class PluginManager:
                     for name, obj in inspect.getmembers(module):
                         if (
                             inspect.isclass(obj)
-                            and issubclass(obj, Processor)
-                            and obj != Processor
+                            and issubclass(obj, IProcessor)
+                            and obj != IProcessor
                         ):
                             # print(f"Found processor class using alternate path: {name}")
                             processors.append(obj)
@@ -89,7 +89,7 @@ class PluginManager:
 
         return processors
 
-    def get_processor_instances(self) -> List[Processor]:
+    def get_processor_instances(self) -> List[IProcessor]:
         """
         Get instances of all available processors.
         """
@@ -101,7 +101,7 @@ class PluginManager:
         self.processors = {name: cls() for name, cls in self.processor_classes.items()}
         return list(self.processors.values())
 
-    def get_processor_by_name(self, name: str) -> Processor:
+    def get_processor_by_name(self, name: str) -> IProcessor:
         """
         Get a processor instance by its name.
         """
@@ -110,7 +110,9 @@ class PluginManager:
                 return processor
         raise ValueError(f"No processor found with name: {name}")
 
-    def get_processors_by_category(self, category: str) -> List[Processor]:
+    def get_processors_by_category(
+        self, category: ProcessorCategory
+    ) -> List[IProcessor]:
         """
         Get all processor instances in a specific category.
         """

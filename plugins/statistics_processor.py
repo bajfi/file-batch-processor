@@ -1,21 +1,25 @@
 import os
+from typing import override
 
 import pandas as pd
-from model.processor import Processor
+from model.individual_processor import IndividualProcessor
 
 
-class StatisticsProcessor(Processor):
+class StatisticsProcessor(IndividualProcessor):
     """Processor for calculating basic statistics on data files."""
 
     @property
+    @override
     def name(self) -> str:
         return "Statistics Calculator"
 
     @property
+    @override
     def description(self) -> str:
         return "Calculates basic statistics (mean, median, std, min, max) for numeric columns."
 
     @property
+    @override
     def file_types(self) -> tuple:
         return (
             ("CSV files", "*.csv"),
@@ -24,6 +28,7 @@ class StatisticsProcessor(Processor):
         )
 
     @property
+    @override
     def config_options(self) -> dict:
         return {
             "output_dir": {
@@ -34,18 +39,22 @@ class StatisticsProcessor(Processor):
         }
 
     @property
+    @override
     def dependencies(self) -> list:
         return ["pandas"]
 
     @property
+    @override
     def version(self) -> str:
         return "1.0.0"
 
     @property
+    @override
     def metadata(self) -> dict:
         return {}
 
     @property
+    @override
     def save_format(self) -> list:
         return [
             ("Text", "txt"),
@@ -54,6 +63,7 @@ class StatisticsProcessor(Processor):
             ("Parquet", "parquet"),
         ]
 
+    @override
     def process(
         self, file: str, output_dir: str = "results", save_format: str = "csv"
     ) -> str:

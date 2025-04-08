@@ -2,65 +2,20 @@ import os
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, override
 
-from model.processor import Processor
-
-
-class ProcessingObserver:
-    """Interface for observers of the processing progress."""
-
-    def on_start(self, total_files: int) -> None:
-        """Called when processing starts."""
-        pass
-
-    def on_file_complete(
-        self, file: str, result: str, success: bool, message: str = ""
-    ) -> None:
-        """Called when a file is processed."""
-        pass
-
-    def on_complete(self) -> None:
-        """Called when all processing is complete."""
-        pass
+from core.batchProcessor.Ibatch_processor import IBatchProcessor
+from model.individual_processor import IndividualProcessor
 
 
-class BatchProcessor:
+class IndividualBatchProcessor(IBatchProcessor):
     """Handles batch processing of files."""
 
-    def __init__(self, processor: Processor, output_dir: str = "results"):
-        """Initialize with a processor and output directory."""
-        self.processor = processor
-        self.output_dir = Path(output_dir).resolve()
-        self.observers: List[ProcessingObserver] = []
+    def __init__(self, processor: IndividualProcessor, output_path: str | Path):
+        """Initialize with a processor and output path."""
+        super().__init__(processor, output_path)
 
-    def add_observer(self, observer: ProcessingObserver) -> None:
-        """Add an observer to receive progress updates."""
-        if observer not in self.observers:
-            self.observers.append(observer)
-
-    def remove_observer(self, observer: ProcessingObserver) -> None:
-        """Remove an observer."""
-        if observer in self.observers:
-            self.observers.remove(observer)
-
-    def _notify_start(self, total_files: int) -> None:
-        """Notify observers that processing has started."""
-        for observer in self.observers:
-            observer.on_start(total_files)
-
-    def _notify_file_complete(
-        self, file: str, result: str, success: bool, message: str = ""
-    ) -> None:
-        """Notify observers that a file has been processed."""
-        for observer in self.observers:
-            observer.on_file_complete(file, result, success, message)
-
-    def _notify_complete(self) -> None:
-        """Notify observers that all processing is complete."""
-        for observer in self.observers:
-            observer.on_complete()
-
+    @override
     def process_files(
         self,
         files: List[str],
@@ -75,7 +30,7 @@ class BatchProcessor:
             max_workers: Maximum number of parallel workers, or None for auto
         """
         # Ensure output directory exists
-        os.makedirs(self.output_dir, exist_ok=True)
+        os.makedirs(self.output_path, exist_ok=True)
 
         # Notify observers that processing has started
         self._notify_start(len(files))
@@ -129,4 +84,4 @@ class BatchProcessor:
         Returns:
             Path to the result file
         """
-        return self.processor.process(file, str(self.output_dir), save_format)
+        return self.processor.process(file, str(self.output_path), save_format)
