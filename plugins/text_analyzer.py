@@ -2,14 +2,13 @@
 Text analyzer plugin for batch processing.
 """
 
-import os
+from pathlib import Path
 from typing import override
 
-import pandas as pd
-from model.individual_processor import IndividualProcessor
+from model.adjoint_processor import AdjointProcessor
 
 
-class TextAnalyzer(IndividualProcessor):
+class TextAnalyzer(AdjointProcessor):
     """Processor for analyzing text files."""
 
     @property
@@ -60,9 +59,7 @@ class TextAnalyzer(IndividualProcessor):
         ]
 
     @override
-    def process(
-        self, file: str, output_dir: str = "results", save_format: str = "txt"
-    ) -> str:
+    def process(self, file: str | Path) -> str:
         # Read the text file
         with open(file, "r", encoding="utf-8") as f:
             content = f.read()
@@ -72,17 +69,25 @@ class TextAnalyzer(IndividualProcessor):
         words = content.split()
         chars = len(content)
 
-        # Create a results dataframe
-        result_df = pd.DataFrame(
-            {
-                "Metric": ["Lines", "Words", "Characters"],
-                "Count": [len(lines), len(words), chars],
-            }
-        )
+        return {
+            "file": {Path(file).stem},
+            "lines": len(lines),
+            "words": len(words),
+            "characters": chars,
+        }
 
-        # Save results
-        result_file = os.path.join(
-            output_dir, os.path.basename(file).replace(".txt", "_analysis.csv")
-        )
-        result_df.to_csv(result_file, index=False)
-        return result_file
+    @override
+    def gather_results(self, results: list, save_format: str) -> None:
+        """
+        Gather and save all processing results.
+
+        Args:
+            results: List of dictionaries with word counts, line counts, etc.
+            save_format: Format to save the results in
+        """
+        if save_format == "txt":
+            with open(self.output_path, "w", encoding="utf-8") as f:
+                for result in results:
+                    f.write(
+                        f"{' '.join(f'{key}: {value}' for key, value in result.items())}\n"
+                    )

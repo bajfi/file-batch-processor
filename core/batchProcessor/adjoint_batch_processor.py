@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any, List, Optional, override
 
 from core.batchProcessor.Ibatch_processor import IBatchProcessor
-from model.Iprocessor import AdjointProcessor
+from model.adjoint_processor import AdjointProcessor
 
 
 class AdjointBatchProcessor(IBatchProcessor):
@@ -28,8 +28,12 @@ class AdjointBatchProcessor(IBatchProcessor):
             files: List of file paths to process
             max_workers: Maximum number of parallel workers, or None for auto
         """
-        # Ensure output path is a file
-        assert self.output_path.is_file(), "Output path must be a file"
+        # Ensure output path is not a directory
+        if self.output_path.exists() and self.output_path.is_dir():
+            raise ValueError("Output path must be a file, not a directory")
+
+        # Make sure parent directory exists
+        self.output_path.parent.mkdir(parents=True, exist_ok=True)
 
         # Notify observers that processing has started
         self._notify_start(len(files))
@@ -68,9 +72,13 @@ class AdjointBatchProcessor(IBatchProcessor):
                 try:
                     result = future.result()
                     results.append(result)
-                    self._notify_file_complete(file, result, True)
+                    # For AdjointProcessor, the result file is the final output path
+                    self._notify_file_complete(file, str(self.output_path), True)
                 except Exception as e:
                     self._notify_file_complete(file, "", False, str(e))
+
+        # Set the output path on the processor
+        self.processor.output_path = self.output_path
 
         # Gather all the results and save them to the output file
         self._gather_results(results, save_format)
@@ -93,7 +101,10 @@ class AdjointBatchProcessor(IBatchProcessor):
     def _gather_results(self, results: List[Any], save_format: str) -> None:
         """
         Gather all the results and save them to the output file.
+
+        Delegates to the processor's gather_results method if available.
         """
-        with open(self.output_path, "w", encoding="utf-8") as f:
-            for result in results:
-                f.write(result)
+        # Check if processor has a gather_results method
+        if hasattr(self.processor, "gather_results"):
+            # Call the processor's method
+            self.processor.gather_results(results, save_format)

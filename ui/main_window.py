@@ -5,10 +5,10 @@ from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 from typing import List, Optional
 
+from core.batchProcessor.batch_processor_factory import BatchProcessorFactory
 from core.batchProcessor.Ibatch_processor import ProcessingObserver
-from core.batchProcessor.individual_batch_processor import IndividualBatchProcessor
 from core.plugin_manager import PluginManager
-from model.Iprocessor import IProcessor
+from model.Iprocessor import IProcessor, ProcessorCategory
 
 
 class MainWindow(tk.Tk, ProcessingObserver):
@@ -23,15 +23,23 @@ class MainWindow(tk.Tk, ProcessingObserver):
         self.geometry("1080x720")
         self.minsize(800, 600)
 
+        # Set up default output path
+        default_output_dir = Path("results").resolve()
+        # Create the directory if it doesn't exist
+        default_output_dir.mkdir(exist_ok=True)
+
         # Initialize state
         self.selected_files: List[str] = []
-        self.output_dir = Path("results").resolve()
+        self.output_path = default_output_dir
         self.plugin_manager = PluginManager()
+        self.batch_processor_factory = BatchProcessorFactory()
         self.selected_processor: Optional[IProcessor] = None
         self.max_workers_var = tk.IntVar(value=os.cpu_count())
         self.save_format_var = tk.StringVar()
         self.batch_size = 8  # Number of results to process at once
         self.result_queue = queue.Queue()
+        self.processed_files = 0
+        self.total_files = 0
 
         # Load plugins
         self.processors = self.plugin_manager.get_processor_instances()
@@ -55,6 +63,9 @@ class MainWindow(tk.Tk, ProcessingObserver):
             )
             if save_formats:
                 self.save_format_combo.current(0)
+
+            # Configure UI based on processor type
+            self._update_ui_for_processor_type()
 
         # Show warning if no processors found
         if not self.processors:
@@ -135,10 +146,11 @@ class MainWindow(tk.Tk, ProcessingObserver):
         self.processor_combo = ttk.Combobox(
             processor_frame,
             textvariable=self.processor_var,
-            values=[p.name for p in self.processors],
+            values=[p.name for p in self.processors if p.name],
             state="readonly" if self.processors else "disabled",
             width=30,
         )
+
         self.processor_combo.pack(side=tk.LEFT, fill=tk.X, expand=True)
         if self.processors:
             self.processor_combo.current(0)
@@ -171,25 +183,24 @@ class MainWindow(tk.Tk, ProcessingObserver):
         # Use grid layout for better alignment
         frame.columnconfigure(1, weight=1)
 
-        # Row 1: Output directory
-        ttk.Label(frame, text="Output Directory:").grid(
-            row=0, column=0, sticky=tk.W, padx=5, pady=5
-        )
+        # Row 1: Output selector (directory or file based on processor type)
+        self.output_label = ttk.Label(frame, text="Output Path:")
+        self.output_label.grid(row=0, column=0, sticky=tk.W, padx=5, pady=5)
 
         output_dir_frame = ttk.Frame(frame)
         output_dir_frame.grid(row=0, column=1, sticky=tk.EW, padx=5, pady=5)
 
-        self.output_dir_var = tk.StringVar(value=self.output_dir)
-        self.output_dir_entry = ttk.Entry(
-            output_dir_frame, textvariable=self.output_dir_var
+        self.output_path_var = tk.StringVar(value=self.output_path)
+        self.output_path_entry = ttk.Entry(
+            output_dir_frame, textvariable=self.output_path_var
         )
-        self.output_dir_entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        self.output_path_entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
 
         # Browse button
-        self.browse_dir_btn = ttk.Button(
-            output_dir_frame, text="Browse...", command=self._browse_output_dir
+        self.browse_btn = ttk.Button(
+            output_dir_frame, text="Browse...", command=self._browse_output
         )
-        self.browse_dir_btn.pack(side=tk.RIGHT, padx=(5, 0))
+        self.browse_btn.pack(side=tk.RIGHT, padx=(5, 0))
 
         # Row 2: Save format and workers
         ttk.Label(frame, text="Save Format:").grid(
@@ -420,16 +431,104 @@ class MainWindow(tk.Tk, ProcessingObserver):
                     self.save_format_var.set(
                         f"{save_formats[0][0]} (*.{save_formats[0][1]})"
                     )
+
+                # Update UI based on processor type
+                self._update_ui_for_processor_type()
                 break
 
-    def _browse_output_dir(self):
+    def _update_ui_for_processor_type(self):
+        """Update UI elements based on the type of selected processor."""
+        if not self.selected_processor:
+            return
+
+        # Update output label and tooltip based on processor type
+        if self.selected_processor.category == ProcessorCategory.INDIVIDUAL:
+            self.output_label.config(text="Output Directory:")
+
+            # Reset output path if it's a file (from previous Adjoint processor)
+            if self.output_path.is_file():
+                default_output_dir = Path("results").resolve()
+                default_output_dir.mkdir(exist_ok=True)
+                self.output_path = default_output_dir
+                self.output_path_var.set(str(default_output_dir))
+
+        elif self.selected_processor.category == ProcessorCategory.ADJOINT:
+            self.output_label.config(text="Output File:")
+
+            # If current output is a directory, suggest a file in that directory
+            if self.output_path.is_dir():
+                default_ext = ""
+                if self.selected_processor.save_format:
+                    default_ext = self.selected_processor.save_format[0][1]
+
+                default_file = (
+                    self.output_path / f"{self.selected_processor.name}_results"
+                )
+                if default_ext:
+                    default_file = default_file.with_suffix(f".{default_ext}")
+
+                # Don't automatically set the path, just update the display
+                self.output_path_var.set(str(default_file))
+
+    def _browse_output(self):
+        """Browse for output directory or file, depending on processor type."""
+        if not self.selected_processor:
+            messagebox.showinfo(
+                "No Tool Selected", "Please select a processing tool first."
+            )
+            return
+
+        if self.selected_processor.category == ProcessorCategory.INDIVIDUAL:
+            self._browse_output_directory()
+        elif self.selected_processor.category == ProcessorCategory.ADJOINT:
+            self._browse_output_file()
+        else:
+            # Default to directory browsing for unknown processor types
+            self._browse_output_directory()
+
+    def _browse_output_directory(self):
         """Browse for output directory."""
         directory = filedialog.askdirectory(
-            title="Select Output Directory", initialdir=self.output_dir
+            title="Select Output Directory", initialdir=self.output_path
         )
         if directory:
-            self.output_dir = Path(directory)
-            self.output_dir_var.set(directory)
+            self.output_path = Path(directory)
+            self.output_path_var.set(directory)
+
+    def _browse_output_file(self):
+        """Browse for output file."""
+        if not self.selected_processor:
+            return
+
+        # Get file extensions from the processor
+        save_formats = self.selected_processor.save_format
+        if not save_formats:
+            save_formats = [("All files", "*.*")]
+
+        # Create file types tuple for dialog
+        filetypes = [(desc, f"*.{ext}") for desc, ext in save_formats]
+
+        # Get default extension from currently selected format
+        default_ext = ""
+        if self.save_format_var.get() and "(*." in self.save_format_var.get():
+            default_ext = self.save_format_var.get().split("*.")[-1].split(")")[0]
+
+        # Default filename based on processor name
+        default_name = f"{self.selected_processor.name}_results"
+        if default_ext:
+            default_name = f"{default_name}.{default_ext}"
+
+        file_path = filedialog.asksaveasfilename(
+            title="Select Output File",
+            initialdir=self.output_path.parent,
+            initialfile=default_name,
+            filetypes=filetypes,
+            defaultextension=f".{default_ext}" if default_ext else None,
+        )
+
+        if file_path:
+            self.output_path = Path(file_path)
+            self.output_path_var.set(file_path)
 
     def _select_files(self):
         """Select files to process."""
@@ -512,10 +611,48 @@ class MainWindow(tk.Tk, ProcessingObserver):
             )
             return
 
-        # Get output directory
-        output_dir = self.output_dir_var.get()
-        if not output_dir:
-            output_dir = "results"
+        # Validate output path based on processor type
+        output_path = Path(self.output_path_var.get())
+        if self.selected_processor.category == ProcessorCategory.INDIVIDUAL:
+            # Ensure output path is a directory for individual processors
+            if output_path.exists() and not output_path.is_dir():
+                messagebox.showerror(
+                    "Invalid Output Path",
+                    "For this processor type, the output path must be a directory.",
+                )
+                return
+            # Create directory if it doesn't exist
+            if not output_path.exists():
+                try:
+                    output_path.mkdir(parents=True, exist_ok=True)
+                except Exception as error:
+                    messagebox.showerror(
+                        "Error Creating Directory",
+                        f"Could not create output directory: {error}",
+                    )
+                    return
+
+        elif self.selected_processor.category == ProcessorCategory.ADJOINT:
+            # For adjoint processors, ensure the output path is a file
+            if output_path.exists() and output_path.is_dir():
+                messagebox.showerror(
+                    "Invalid Output Path",
+                    "For this processor type, the output path must be a file, not a directory.",
+                )
+                return
+            # Ensure parent directory exists
+            if not output_path.parent.exists():
+                try:
+                    output_path.parent.mkdir(parents=True, exist_ok=True)
+                except Exception as error:
+                    messagebox.showerror(
+                        "Error Creating Directory",
+                        f"Could not create parent directory: {error}",
+                    )
+                    return
+
+        # Update output path with validated path
+        self.output_path = output_path
 
         # Get selected save format
         save_format = ""
@@ -530,8 +667,8 @@ class MainWindow(tk.Tk, ProcessingObserver):
             max_workers = self.max_workers_var.get()
             if max_workers < 1:
                 max_workers = None
-        except Exception as e:
-            print(f"Error getting max workers: {e}")
+        except (ValueError, TypeError) as error:
+            print(f"Error getting max workers: {error}")
             max_workers = None
 
         # Clear previous results
@@ -551,20 +688,28 @@ class MainWindow(tk.Tk, ProcessingObserver):
         self.status_var.set(f"Processing files with {self.selected_processor.name}...")
         self.update()
 
-        # Create batch processor and start processing
-        self.batch_processor = IndividualBatchProcessor(
-            self.selected_processor, output_dir
-        )
-        self.batch_processor.add_observer(self)
-        self.batch_processor.process_files(
-            self.selected_files, max_workers, save_format
-        )
+        try:
+            # Create batch processor and start processing
+            self.batch_processor = self.batch_processor_factory.create_batch_processor(
+                self.selected_processor, self.output_path
+            )
+            self.batch_processor.add_observer(self)
+            self.batch_processor.process_files(
+                self.selected_files, max_workers, save_format
+            )
+        except Exception as error:
+            # Re-enable buttons
+            self._set_controls_state(tk.NORMAL)
+            self.process_status_var.set(f"Error: {error}")
+            self.status_var.set(f"Error: {error}")
+            messagebox.showerror("Processing Error", f"An error occurred: {error}")
+            print(f"Error in processing: {error}")
 
     def _set_controls_state(self, state):
         """Set the state of control buttons."""
         self.select_files_btn.config(state=state)
         self.process_btn.config(state=state)
-        self.browse_dir_btn.config(state=state)
+        self.browse_btn.config(state=state)
         self.workers_spinbox.config(state=state)
         self.processor_combo.config(state="readonly" if state == tk.NORMAL else state)
         self.refresh_btn.config(state=state)
@@ -580,25 +725,32 @@ class MainWindow(tk.Tk, ProcessingObserver):
 
     def on_file_complete(self, file, result, success, message=""):
         """Called when a file is processed."""
+        # Extract just the filename for display
+        filename = os.path.basename(file)
+        result_filename = os.path.basename(result) if result else ""
+
         # Update results treeview
         if success:
             self.results_tree.insert(
                 "",
                 tk.END,
                 values=(
-                    os.path.basename(file),
-                    os.path.basename(result) if result else "",
+                    filename,
+                    result_filename,
                     "Success",
                 ),
                 tags=("success",),
             )
         else:
+            error_message = message if message else "Unknown error"
             self.results_tree.insert(
                 "",
                 tk.END,
-                values=(os.path.basename(file), "", f"Error: {message}"),
+                values=(filename, "", f"Error: {error_message}"),
                 tags=("error",),
             )
+            # Log the error
+            print(f"Error processing file {filename}: {error_message}")
 
         # Configure tag colors
         self.results_tree.tag_configure("success", foreground="green")
@@ -609,13 +761,14 @@ class MainWindow(tk.Tk, ProcessingObserver):
         progress_percent = (self.processed_files / self.total_files) * 100
         self.progress_var.set(progress_percent)
         self.progress_percent_var.set(f"{int(progress_percent)}%")
-        self.process_status_var.set(
-            f"Processed {self.processed_files} of {self.total_files} files"
-        )
-        self.status_var.set(
-            f"Processed {self.processed_files} of {self.total_files} files"
-        )
-        self.update()
+
+        # Update status messages
+        status_text = f"Processed {self.processed_files} of {self.total_files} files"
+        self.process_status_var.set(status_text)
+        self.status_var.set(status_text)
+
+        # Make sure UI updates are applied
+        self.update_idletasks()
 
     def on_complete(self):
         """Called when all processing is complete."""

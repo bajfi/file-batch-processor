@@ -65,7 +65,6 @@ class PluginManager:
                         and issubclass(obj, IProcessor)
                         and obj != IProcessor
                     ):
-                        # print(f"Found processor class: {name}")
                         processors.append(obj)
                         self.processor_classes[obj.__name__] = obj
             except Exception as e:
