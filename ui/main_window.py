@@ -426,7 +426,7 @@ class MainWindow(tk.Tk, ProcessingObserver):
             extension = "." + selected_format.split("*.")[-1].split(")")[0]
 
         # Make sure the result path is updated to the new format
-        if extension:
+        if extension and os.path.isfile(self.output_path):
             self.output_path_var.set(
                 str(self.output_path.with_suffix(extension).resolve())
             )
@@ -618,70 +618,93 @@ class MainWindow(tk.Tk, ProcessingObserver):
         for file in self.selected_files:
             self.files_listbox.insert(tk.END, os.path.basename(file))
 
-    def _process_files(self):
-        """Process the selected files."""
+    def _validate_prerequisites(self):
+        """Validate prerequisites before processing files."""
         if not self.selected_files:
             messagebox.showinfo("No Files", "Please select files to process first.")
-            return
+            return False
 
         if not self.selected_processor:
             messagebox.showinfo(
                 "No Tool Selected", "Please select a processing tool first."
             )
-            return
+            return False
 
-        # Validate output path based on processor type
+        return True
+
+    def _validate_and_prepare_output_path(self):
+        """Validate and prepare the output path based on processor type."""
         output_path = Path(self.output_path_var.get())
+
+        # Different validation based on processor category
         if self.selected_processor.category == ProcessorCategory.INDIVIDUAL:
-            # Ensure output path is a directory for individual processors
-            if output_path.exists() and not output_path.is_dir():
-                messagebox.showerror(
-                    "Invalid Output Path",
-                    "For this processor type, the output path must be a directory.",
-                )
-                return
-            # Create directory if it doesn't exist
-            if not output_path.exists():
-                try:
-                    output_path.mkdir(parents=True, exist_ok=True)
-                except Exception as error:
-                    messagebox.showerror(
-                        "Error Creating Directory",
-                        f"Could not create output directory: {error}",
-                    )
-                    return
+            if not self._validate_individual_output_path(output_path):
+                return None
 
         elif self.selected_processor.category == ProcessorCategory.ADJOINT:
-            # For adjoint processors, ensure the output path is a file
-            if output_path.exists() and output_path.is_dir():
+            if not self._validate_adjoint_output_path(output_path):
+                return None
+
+        return output_path
+
+    def _validate_individual_output_path(self, output_path):
+        """Validate and prepare output path for individual processors."""
+        # Ensure output path is a directory for individual processors
+        if output_path.exists() and not output_path.is_dir():
+            messagebox.showerror(
+                "Invalid Output Path",
+                "For this processor type, the output path must be a directory.",
+            )
+            return False
+
+        # Create directory if it doesn't exist
+        if not output_path.exists():
+            try:
+                output_path.mkdir(parents=True, exist_ok=True)
+            except Exception as error:
                 messagebox.showerror(
-                    "Invalid Output Path",
-                    "For this processor type, the output path must be a file, not a directory.",
+                    "Error Creating Directory",
+                    f"Could not create output directory: {error}",
                 )
-                return
-            # Ensure parent directory exists
-            if not output_path.parent.exists():
-                try:
-                    output_path.parent.mkdir(parents=True, exist_ok=True)
-                except Exception as error:
-                    messagebox.showerror(
-                        "Error Creating Directory",
-                        f"Could not create parent directory: {error}",
-                    )
-                    return
+                return False
 
-        # Update output path with validated path
-        self.output_path = output_path
+        return True
 
-        # Get selected save format
+    def _validate_adjoint_output_path(self, output_path):
+        """Validate and prepare output path for adjoint processors."""
+        # For adjoint processors, ensure the output path is a file
+        if output_path.exists() and output_path.is_dir():
+            messagebox.showerror(
+                "Invalid Output Path",
+                "For this processor type, the output path must be a file, not a directory.",
+            )
+            return False
+
+        # Ensure parent directory exists
+        if not output_path.parent.exists():
+            try:
+                output_path.parent.mkdir(parents=True, exist_ok=True)
+            except Exception as error:
+                messagebox.showerror(
+                    "Error Creating Directory",
+                    f"Could not create parent directory: {error}",
+                )
+                return False
+
+        return True
+
+    def _get_save_format(self):
+        """Extract the save format extension from the selected format."""
         save_format = ""
         if self.save_format_var.get():
             # Extract extension from the format string like "Text (*.txt)"
             format_str = self.save_format_var.get()
             if "(*." in format_str:
                 save_format = format_str.split("*.")[-1].split(")")[0]
+        return save_format
 
-        # Get number of workers
+    def _get_max_workers(self):
+        """Get the maximum number of worker threads."""
         try:
             max_workers = self.max_workers_var.get()
             if max_workers < 1:
@@ -689,7 +712,10 @@ class MainWindow(tk.Tk, ProcessingObserver):
         except (ValueError, TypeError) as error:
             print(f"Error getting max workers: {error}")
             max_workers = None
+        return max_workers
 
+    def _prepare_ui_for_processing(self):
+        """Prepare the UI components for processing."""
         # Clear previous results
         for item in self.results_tree.get_children():
             self.results_tree.delete(item)
@@ -707,6 +733,35 @@ class MainWindow(tk.Tk, ProcessingObserver):
         self.status_var.set(f"Processing files with {self.selected_processor.name}...")
         self.update()
 
+    def _handle_processing_error(self, error):
+        """Handle errors during processing."""
+        self._set_controls_state(tk.NORMAL)
+        self.process_status_var.set(f"Error: {error}")
+        self.status_var.set(f"Error: {error}")
+        messagebox.showerror("Processing Error", f"An error occurred: {error}")
+        print(f"Error in processing: {error}")
+
+    def _process_files(self):
+        """Process the selected files."""
+        # Validate prerequisites
+        if not self._validate_prerequisites():
+            return
+
+        # Validate and prepare output path
+        output_path = self._validate_and_prepare_output_path()
+        if not output_path:
+            return
+
+        # Update output path with validated path
+        self.output_path = output_path
+
+        # Get processing parameters
+        save_format = self._get_save_format()
+        max_workers = self._get_max_workers()
+
+        # Prepare UI for processing
+        self._prepare_ui_for_processing()
+
         try:
             # Create batch processor and start processing
             self.batch_processor = self.batch_processor_factory.create_batch_processor(
@@ -717,12 +772,7 @@ class MainWindow(tk.Tk, ProcessingObserver):
                 self.selected_files, max_workers, save_format
             )
         except Exception as error:
-            # Re-enable buttons
-            self._set_controls_state(tk.NORMAL)
-            self.process_status_var.set(f"Error: {error}")
-            self.status_var.set(f"Error: {error}")
-            messagebox.showerror("Processing Error", f"An error occurred: {error}")
-            print(f"Error in processing: {error}")
+            self._handle_processing_error(error)
 
     def _set_controls_state(self, state):
         """Set the state of control buttons."""

@@ -59,7 +59,7 @@ class PluginManager:
                 module = importlib.import_module(module_name)
 
                 # Find all Processor subclasses in the module
-                for name, obj in inspect.getmembers(module):
+                for _, obj in inspect.getmembers(module):
                     if (
                         inspect.isclass(obj)
                         and issubclass(obj, IProcessor)
@@ -74,7 +74,7 @@ class PluginManager:
                     module_name = f"plugins.{plugin_file.stem}"
                     # print(f"Trying alternate import: {module_name}")
                     module = importlib.import_module(module_name)
-                    for name, obj in inspect.getmembers(module):
+                    for _, obj in inspect.getmembers(module):
                         if (
                             inspect.isclass(obj)
                             and issubclass(obj, IProcessor)
