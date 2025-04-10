@@ -215,6 +215,10 @@ class MainWindow(tk.Tk, ProcessingObserver):
         )
         self.save_format_combo.pack(side=tk.LEFT, fill=tk.X, expand=True)
 
+        self.save_format_combo.bind(
+            "<<ComboboxSelected>>", self._on_save_format_selected
+        )
+
         ttk.Label(options_frame, text="Parallel Cores:").pack(
             side=tk.LEFT, padx=(15, 5)
         )
@@ -411,6 +415,21 @@ class MainWindow(tk.Tk, ProcessingObserver):
                 "No processing plugins were found. Please add plugins to the 'plugins' directory.",
             )
             self.save_format_combo.config(values=[])
+
+    def _on_save_format_selected(self, event):
+        """Handle save format selection change."""
+        selected_format = self.save_format_var.get()
+
+        # Extract the extension from the format string (e.g., "CSV (*.csv)" -> ".csv")
+        extension = ""
+        if "(*." in selected_format:
+            extension = "." + selected_format.split("*.")[-1].split(")")[0]
+
+        # Make sure the result path is updated to the new format
+        if extension:
+            self.output_path_var.set(
+                str(self.output_path.with_suffix(extension).resolve())
+            )
 
     def _on_processor_selected(self, event):
         """Handle processor selection change."""
